@@ -17,6 +17,7 @@ import json
 # from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from gspread.exceptions import WorksheetNotFound
 
 from typing import List, Dict, Optional
 from google.oauth2 import service_account
@@ -26,19 +27,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+#Change path to match the address of the file
 google_api_creds = 'ggsheet_credentials.json'
 spreadsheet_id = os.getenv('GOOGLE_SHEET_ID') 
 drive_id = os.getenv('GOOGLE_DRIVE_ID')
 
 #Google Sheet
 def gs_to_df_pandas(tab_name, spreadsheet_id = spreadsheet_id, creds_path=google_api_creds):
-  gc = gspread.service_account(filename=creds_path)
-  sh = gc.open_by_key(spreadsheet_id)
-  wks = sh.worksheet(tab_name)
-  df = pd.DataFrame(wks.get_all_records())
-  return df
+    '''
+    Pull content from ggsheet to pd.DataFrame
+    
+    Parameter:
+    tab_name: Tab name on gg_sheet
+    spreadsheet_id: Already set in .env
+    
+    '''
+    gc = gspread.service_account(filename=creds_path)
+    sh = gc.open_by_key(spreadsheet_id)
+    wks = sh.worksheet(tab_name)
+    df = pd.DataFrame(wks.get_all_records())
+    return df
 
 def gs_to_dict( tab_name, spreadsheet_id = spreadsheet_id, creds_path=google_api_creds):
+    '''
+    Pull content from ggsheet to dictionary
+    
+    Parameter:
+    tab_name: Tab name on gg_sheet
+    spreadsheet_id: Already set in .env
+    
+    '''
     gc = gspread.service_account(filename=creds_path)
     sh = gc.open_by_key(spreadsheet_id)
     wks = sh.worksheet(tab_name)
@@ -46,9 +64,14 @@ def gs_to_dict( tab_name, spreadsheet_id = spreadsheet_id, creds_path=google_api
     return results_json
 
 def write_df_to_gs(df, tab_name, spreadsheet_id = spreadsheet_id, creds_path=google_api_creds):
-    import gspread
-    from gspread.exceptions import WorksheetNotFound
+    '''
+    Write df content to ggsheet
     
+    Parameter:
+    df: pd.DataFrame
+    tab_name: Tab name on gg_sheet
+    
+    '''
     gc = gspread.service_account(filename=creds_path)
     sh = gc.open_by_key(spreadsheet_id)
 
@@ -80,6 +103,14 @@ def list_drive_files(
     folder_id: str = drive_id,
     creds_path: str = google_api_creds,
     prefix_path: str = ''):
+    
+    '''
+    List all folders and files in the Google Drive as tree
+    
+    Parameter:
+    No need
+    
+    '''
     
     service = get_drive_service(creds_path)
     results = []
@@ -161,7 +192,16 @@ def find_file_full_path(
     creds_path: str = google_api_creds,
     drive_id: Optional[str] = None
 ) -> Optional[Dict]:
-
+    '''
+    Find the full path of a file inside the Drive
+    
+    Parameter:
+    filename: Only filename
+    
+    Return:
+    full path to the file inside the Drive
+    
+    '''
     creds = service_account.Credentials.from_service_account_file(
         creds_path,
         scopes=["https://www.googleapis.com/auth/drive"]
@@ -206,7 +246,16 @@ def find_file_full_path(
     return full_path
 
 def read_drive_file(path: str, creds_path: str = google_api_creds, as_type: str = None, drive_id: str = drive_id):
+    '''
+    Return the parsed text from the Drive file
     
+    Parameter:
+    path: Full path to the file or just filename
+    
+    Return: text content inside the file
+    
+    File format supported: json, csv, docx, doc, pdf, txt
+    '''
     full_path = path if "/" in path else find_file_full_path(path)
     service = get_drive_service(creds_path)
     parts = full_path.replace("\\", "/").split("/")
@@ -421,6 +470,13 @@ def count_files_by_folder_name(
 ):
     """
     Count files inside a folder specified by *name*, not ID.
+    
+    Input: name of the folder
+    
+    Return: x, y
+    
+    x: int: number of files inside that folder
+    y: List[str]: list of name of files inside that folder
     """
     folder_info = find_folder_by_name(folder_name, creds_path)
 

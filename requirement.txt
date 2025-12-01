@@ -8,6 +8,8 @@ pydantic
 langchain_google_genai 
 ragas 
 langchain 
+langchain_docling
+langchain-chroma
 sentence_transformers 
 docling-core 
 docling 
@@ -22,6 +24,9 @@ pandas
 numpy
 matplotlib
 seaborn
+torch torchvision torchaudio
+google-generativeai
+langchain-text-splitters
 
 neo4j-graphrag
 neo4j-graphrag[openai]
