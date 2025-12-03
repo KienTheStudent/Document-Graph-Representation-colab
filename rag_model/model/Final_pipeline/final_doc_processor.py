@@ -11,19 +11,52 @@ import re
 import unicodedata
 from collections import OrderedDict
 
-from shared_functions.gg_sheet_drive import *
-from shared_functions.global_functions import *
-
 project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
     
+from shared_functions.gg_sheet_drive import *
+from shared_functions.global_functions import *
+from rag_model.model.NER.final_ner import *
+
 class Doc_processor:
     def __init__(self, ner, re_model, final_re):
         self.ner = ner
         self.re_model = re_model
         self.final_re = final_re
     
+    def pre_process(self, filepath: str):
+        '''
+        Save the uploaded file into the predefined storage and return the text for later processing
+        '''
+        check_type = ['Luật', 'Nghị Định', 'Nghị Quyết', 'Quyết Định', 'Thông Tư']
+        
+        if filepath.split('/')[-1].endswith('doc'):
+            temp_path = doc_to_docx(filepath, filepath.replace('doc', 'docx'))
+            filepath = docx_to_pdf(temp_path, temp_path.replace('docx', 'pdf'))
+            
+        if filepath.split('/')[-1].endswith('docx'):
+            filepath = docx_to_pdf(filepath, filepath.replace('docx', 'pdf'))
+            
+        try:
+            text = ""
+            with pdfplumber.open(filepath) as pdf:
+                for page in pdf.pages:
+                    text += (page.extract_text() or "") + "\n"
+        except:
+            # fallback
+            reader = PyPDF2.PdfReader(filepath)
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        
+        df_meta = self.ner.extract_document_metadata(text)
+        
+        if df_meta['document_type'].iloc[0] in check_type:
+            upload_file_to_s3(filepath)
+            return get_text_from_s3(filepath.split('/')[-1])
+        else: 
+            print('Not Valid document!')
+            return 
+        
     def normalize_unicode(self, s: str) -> str:
         s = unicodedata.normalize("NFKC", s)
         s = s.replace("\u00A0", " ").replace("\u202F", " ").replace("\u200B", "")
