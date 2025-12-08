@@ -52,7 +52,7 @@ II. Working file for each task
 
 III. Some additional Notes
 
-1. When use text_embedding() from shared_functions/global_functions.py
+1. When use text_embedding() from rag_model.model.Final_pipeline.final_doc_processor.py
 
 List of embedding model and their respective id
 
