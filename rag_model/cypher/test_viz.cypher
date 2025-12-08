@@ -1,5 +1,5 @@
 // Show all nodes and relationship in namespace Test1
-MATCH (n:Test_rel_3)-[r]->(m:Test_rel_3)
+MATCH (n:Test1)-[r]->(m:Test1)
 RETURN n, r, m;
 // LIMIT 200 if need to limit down to 200 nodes only
 

@@ -66,7 +66,7 @@ class BiLSTM_CRF(nn.Module):
             return self.crf.decode(emissions, mask=mask)
 
 class NER:
-    def __init__(self, model_path, token2idx_path, label2idx_path, annotator, device="cpu"):
+    def __init__(self, model_path, token2idx_path, label2idx_path, annotator = None, device="cpu"):
         """
         Initialize and load model + dictionaries.
         """

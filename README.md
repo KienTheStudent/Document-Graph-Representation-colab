@@ -68,7 +68,7 @@ models = {
 If use phobert-base then call PhoBERTEmbedding first
 
 ```python
-from rag_model.model.RE.final_re import *
+from rag_model.model.Final_pipeline.final_doc_processor import *
 
 phobert = PhoBERTEmbedding()
 

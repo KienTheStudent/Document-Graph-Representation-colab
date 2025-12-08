@@ -8,18 +8,32 @@
 // Mutate Mode: Modify the projected in-memory GDS graph, not the Neo4j Database
 // -> add properties into the GDS projection, faster than write but written properties will disappear when in-memory graph is dropped
 
+CALL apoc.export.cypher.all(null, {stream:true}) YIELD cypher
+RETURN cypher
+
 
 // Graph preparation
 CALL gds.graph.project(
   'legalGraph', // name of the graph
-  'Clause', //Node label, for example only Clause nodes
-  'CITES', //Types of relations to be included in the projection
+  ['Clause'], //Node label, for example only Clause nodes
+  ['CITES'], //Types of relations to be included in the projection
+  // or just use '*' to include all existing Node label/ Relation label
+
   {
     nodeProperties: [
         'feature0',
         'feature1',
         'feature2'
     ]
+  }
+);
+
+CALL gds.graph.project(
+  'sample',
+  ['Chapter', 'Clause', 'Point', 'Subpoint'],
+  '*',
+  {
+    nodeProperties: ['original_embedding']
   }
 );
 
@@ -32,6 +46,36 @@ ORDER BY graphName ASC
 CALL gds.graph.list('personsCypher')
 YIELD graphName, configuration, schemaWithOrientation
 RETURN graphName, configuration.query AS query, schemaWithOrientation
+
+// Graph projection for multiple parallel edges
+CALL gds.graph.project(
+  'user-proj',
+  ['User'],
+  {
+    SENT_MONEY_TO: {
+      properties: {
+        numberOfTransactions: {
+          // the wildcard '*' is a placeholder, signaling that
+          // the value of the relationship property is derived
+          // and not based on Neo4j property.
+          property: '*',
+          aggregation: 'COUNT' //aggregate multiple edges of same types, can be SUM, MIN, MAX
+        }
+      }
+    }
+  }
+);
+
+// Function from Neo4j Projection
+MATCH (sourceNode:Node)-[r:RELATIONSHIP]->(targetNode:Node)
+WITH gds.graph.project(
+    graphName: String,
+    sourceNode: Node or Integer,
+    targetNode: Node or Integer,
+    dataConfig: Map,
+    configuration: Map
+) AS g
+RETURN g
 
 // New Graph projection in recent version
 MATCH (source:Person)-[r:LIKES]->(target:Instrument)
@@ -78,23 +122,48 @@ RETURN modelName, modelInfo;
 
 //
 //
+
+//Stream graph attributes to screen
+CALL gds.graph.nodeProperty.stream(
+  'native-proj',
+  'ratingCount',
+  ['Movie'],
+  {relationshipWeightProperty: ''}
+  )
+YIELD nodeId, propertyValue
+RETURN
+  gds.util.asNode(nodeId).title AS movieTitle,
+  propertyValue AS ratingCount
+ORDER BY movieTitle DESCENDING LIMIT 5
+
+//Preprocess before projection to ensure all attributes are present
+MATCH (n)
+WHERE n.document_type is null
+SET n.document_type = 0;
+
+MATCH (n)
+WHERE n.amend is null
+SET n.amend = -1;
+
+MATCH (n)
+WHERE n.original_embedding is null
+SET n.original_embedding = apoc.convert.toList(reduce(x=[], i IN range(1,768) | x + 0.0));
+
+
 // GraphSAGE
 CALL gds.beta.graphSage.train(
-  'persons', //persons is the projected graph into GDS
+  'sample',
   {
-    modelName: 'sage_model', // name of the model
-    featureProperties: ['age', 'heightAndWeight'], // node feature to calculate embedding, must be numerical
-    aggregator: 'pool', // mean/ pool
-    activationFunction: 'sigmoid',
-    embeddingDimension: 128, //256, 512
-    randomSeed: 42,
-    sampleSizes: [25, 10],
+    modelName: 'sage',
+    featureProperties: ['original_embedding', 'document_type', 'amend'],
+    // labelProperty: '*',       // node attribute with class labels (target label)
+    nodeLabels: ['*'],           // label of nodes used, for example only Clause node
+    embeddingDimension: 128,
+    aggregator: 'mean',
     epochs: 10,
-    batchSize: 1,
-    learningRate: 0.01,
-    negativeSamplingRatio: 5, //for unsupervised (embedding training), for each real edge,
-                                    // generate 5 fake edges for model enhancement
-    projectedFeatureDimension: 3 //for multiple labels per node, we concatenate and project all attributes from all node labels, for example
+    learningRate: 0.001
+
+    projectedFeatureDimension: 770 //for multiple labels per node, we concatenate and project all attributes from all node labels, for example
                                     // label A (a,b,c), label B (d, e) -> projectedFeatureDimension is the maximum attribute of a Node label = 3
   }
 ) YIELD modelInfo as info
@@ -111,10 +180,10 @@ return info
 
 // write graphsage embedding to neo4j, save into neo4j
 CALL gds.beta.graphSage.write(
-  'myGraph', //projected graph into GDS
+  'sample', //projected graph into GDS
   {
-    modelName: 'sageModel', //trained GraphSage model
-    writeProperty: 'Embedding' //new node attribute saved for Embedding
+    modelName: 'sage', //trained GraphSage model
+    writeProperty: 'embedding' //new node attribute saved for Embedding
   }
 );
 
@@ -315,3 +384,47 @@ RETURN
   gds.util.asNode(node2).name AS person2,
   probability
 ORDER BY probability DESC, person1
+
+//
+// Other related algorithms
+
+// Degree centrality
+CALL gds.degree.mutate('my-graph-projection', {mutateProperty:'property_name'})
+
+// Stream the result back (by calling the nodeProperty attribute)
+CALL gds.graph.nodeProperty.stream(
+  'my-graph-projection',
+  'numberOfMoviesActedIn'
+  )
+YIELD nodeId, propertyValue
+RETURN
+  gds.util.asNode(nodeId).name AS actorName,
+  propertyValue AS numberOfMoviesActedIn
+ORDER BY numberOfMoviesActedIn DESCENDING, actorName LIMIT 10
+
+// or write the result directly into the DB
+CALL gds.graph.nodeProperties.write(
+  'my-graph-projection',
+  ['numberOfMoviesActedIn'],
+  ['Actor']
+  )
+
+//
+//
+// Shortest Path
+// Dijsktra Shortest Path
+MATCH (kevin:Actor{name : 'Kevin Bacon'})
+MATCH (denzel:Actor{name : 'Denzel Washington'})
+
+CALL gds.shortestPath.dijkstra.stream(
+    'proj',
+    {
+        sourceNode:kevin,
+        TargetNode:denzel
+    }
+)
+
+YIELD sourceNode, targetNode, path
+RETURN sourceNode, targetNode, nodes(path) as path;
+
+CALL apoc.export.json.all(null, {stream: true})

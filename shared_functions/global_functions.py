@@ -17,6 +17,7 @@ import os, sys
 import win32com.client as win32
 import mammoth, pdfplumber, tempfile, docx2txt
 import json
+import time
 
 from sentence_transformers import SentenceTransformer
 
@@ -273,36 +274,88 @@ def query_mysql(query:str):
 URI = os.getenv('NEO4J_URI')
 AUTH = ("neo4j", os.getenv('NEO4J_AUTH'))
 
+driver = GraphDatabase.driver(URI, auth=AUTH, keep_alive=True)
+
 def query_neo4j(query: str, **params):
     """
     Function to query the Neo4j db, used for Query and retrieving data
     """
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
-        driver.verify_connectivity()
-        records, summary, keys = driver.execute_query(
-            query,
-            **params,  #Expect params to be in dictionary format
-            database="neo4j"
-        )
-        return [record.data() for record in records]
+    records, summary, keys = driver.execute_query(
+        query,
+        **params,  #Expect params to be in dictionary format
+        database="neo4j"
+    ) #type: ignore
+    return [record.data() for record in records]
+
+# def dml_ddl_neo4j(query: str, **params):
+#     """
+#     Function for DDL and DML in Neo4j database
+#     """    
+#     records, summary, keys = driver.execute_query(
+#         query,
+#         **params,   #Expect params to be in dictionary format
+#         database="neo4j"
+#     ) #type: ignore
+
+#     print("Created {nodes_created} nodes, {rels_created} rels in {time} ms.".format(
+#         nodes_created=summary.counters.nodes_created,
+#         rels_created=summary.counters.relationships_created,
+#         time=summary.result_available_after
+#     ))
 
 def dml_ddl_neo4j(query: str, **params):
     """
-    Function for DDL and DML in Neo4j database
-    """    
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
-        driver.verify_connectivity()
-        records, summary, keys = driver.execute_query(
-            query,
-            **params,   #Expect params to be in dictionary format
-            database="neo4j"
-        )
+    Safe DML/DDL executor for Neo4j Aura.
+    Auto-retries on transient connection failures.
+    Creates short-lived sessions to avoid Aura's 5-minute idle timeout.
+    """
 
-        print("Created {nodes_created} nodes, {rels_created} rels in {time} ms.".format(
-            nodes_created=summary.counters.nodes_created,
-            rels_created=summary.counters.relationships_created,
-            time=summary.result_available_after
-        ))
+    MAX_RETRY = 5
+    RETRY_DELAY = 1  # seconds
+
+    for attempt in range(1, MAX_RETRY + 1):
+        try:
+            # Use a fresh session for every write to avoid Aura idle timeout
+            with driver.session(database="neo4j") as session:
+                result = session.execute_write(
+                    lambda tx: tx.run(query, **params).consume()
+                )
+
+            # Print counters only if available
+            c = result.counters
+            print(
+                f"Created {c.nodes_created} nodes, "
+                f"{c.relationships_created} rels "
+                f"in {result.result_available_after} ms."
+            )
+            return result
+
+        except Exception as e:
+            err = str(e)
+
+            # All errors Aura produces when the connection is killed
+            transient_errors = [
+                "WinError 10054",
+                "ConnectionResetError",
+                "ServiceUnavailable",
+                "SessionExpired",
+                "TransientError",
+                "IncompleteCommit",
+                "Read from defunct connection",
+                "BoltConnectionFatality",
+            ]
+
+            if any(t in err for t in transient_errors):
+                print(f"[Retry {attempt}/{MAX_RETRY}] Transient error:", err)
+                time.sleep(RETRY_DELAY)
+                continue  # retry the loop
+
+            # Non-retryable error → raise immediately
+            raise
+
+    raise RuntimeError(
+        f"Neo4j query failed after {MAX_RETRY} retries.\nQuery:\n{query}"
+    )
 
 #File format changes
 def save_to_txt(text: str, file_name: str):
@@ -385,34 +438,3 @@ def doc_to_docx(input_path, output_path=None):
     word.Quit()
 
     return output_path
-
-def text_embedding(text, model_id, phobert=None):
-    """
-    Embed text based on the model from a set of pretrained models
-    
-    Input: 
-    text: str 
-    model_id: int (position of model)
-    
-    Return:
-    embedding: numpy.ndarray
-    """
-    
-    models = {
-        0: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        1: "sentence-transformers/distiluse-base-multilingual-cased-v2",
-        2: "sentence-transformers/all-mpnet-base-v2",
-        3: "vinai/phobert-base"
-    }
-
-    if model_id < 3:
-        embedding_model = SentenceTransformer(models[model_id])
-        return embedding_model.encode(text)
-
-    elif model_id == 3:
-        assert phobert is not None, "PhoBERT model must be passed when model_id == 5"
-
-        embedding, _, _ = phobert.encode(text)
-        embedding = embedding.squeeze(0).mean(0).detach().numpy()
-
-        return embedding
