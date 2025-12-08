@@ -89,3 +89,9 @@ text = 'sample text'
 
 embedding = text_embedding(text, 1)
 ```
+
+The Sample Evaluation function can be found in 
+
+rag_model/retrieval_pipeline/evaluation.ipynb
+
+This is not the final version and will be changed in the future
