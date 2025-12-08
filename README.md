@@ -61,7 +61,8 @@ models = {
         0: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         1: "sentence-transformers/distiluse-base-multilingual-cased-v2",
         2: "sentence-transformers/all-mpnet-base-v2",
-        3: "vinai/phobert-base"
+        3: 'sentence-transformers/all-MiniLM-L12-v2',
+        4: "vinai/phobert-base"
     }
 ```
 
@@ -74,5 +75,17 @@ phobert = PhoBERTEmbedding()
 
 text = 'sample text'
 
-embedding = text_embedding(text, 3, phobert)
+embedding = text_embedding(text, 4, phobert)
+```
+
+If not use phobert-base then no need to call phobert parameter
+
+```python
+from rag_model.model.Final_pipeline.final_doc_processor import *
+
+phobert = PhoBERTEmbedding()
+
+text = 'sample text'
+
+embedding = text_embedding(text, 1)
 ```

@@ -42,14 +42,15 @@ def text_embedding(text, model_id, phobert=None):
         0: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         1: "sentence-transformers/distiluse-base-multilingual-cased-v2",
         2: "sentence-transformers/all-mpnet-base-v2",
-        3: "vinai/phobert-base"
+        3: 'sentence-transformers/all-MiniLM-L12-v2',
+        4: "vinai/phobert-base"
     }
 
-    if model_id < 3:
+    if model_id < 4:
         embedding_model = SentenceTransformer(models[model_id])
         return embedding_model.encode(text)
 
-    elif model_id == 3:
+    elif model_id == 4:
         assert phobert is not None, "PhoBERT model must be passed when model_id == 5"
 
         embedding, _, _ = phobert.encode(text)
