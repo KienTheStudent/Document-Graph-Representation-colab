@@ -328,8 +328,8 @@ class Doc_processor:
 
                 run_write(cypher, {"id": node_id})
 
-    # finish by embedding chunks
-    self.embed_chunk_nodes(namespace)
+        # finish by embedding chunks
+        self.embed_chunk_nodes(namespace)
 
     # def very_cool_chunking_with_graph(self, namespace = 'Test'):
     #     levels = {
@@ -2181,7 +2181,7 @@ class Doc_processor:
                             id=subpoint_id,
                             text=subpoint_text,
                             point_id=point_id,
-                            subpoint_embedding = text_embedding(clause_text, embedding_id, phobert)
+                            original_embedding = text_embedding(clause_text, embedding_id, phobert)
                         )
                         
                         #Extract relation

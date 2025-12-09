@@ -27,6 +27,7 @@ seaborn
 torch torchvision torchaudio
 google-generativeai
 langchain-text-splitters
+pytorch-crf
 
 neo4j-graphrag
 neo4j-graphrag[openai]
